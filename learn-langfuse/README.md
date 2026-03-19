@@ -14,3 +14,7 @@ this creates a .venv folder with the dependencies and a pyproject.toml file with
 
 `uv add {packagename} --dev` adds the package to the dev dependencies. this way we can separate environments for development and production, and more.
 
+we can also run projects with:
+`uv run {command}`
+
+that way we can run our main project file.
