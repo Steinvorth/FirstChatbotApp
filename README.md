@@ -5,6 +5,8 @@ This is just a public journey of learning how to code agentic, and chatbot apps.
 
 **This readme will be updated each time i learn something new, and will work as a "diary" of some sort, to be able to document all my findings, and possible thoughts or vision of the app throughout the development lifecycle.**
 
+**Disclaimer:** Im using AI to learn and guide me. this means you may see some AI generated Labels or comments, but everything in the readme is written by me. Im using ai to build a little quicker, and also to be able to understand things that are not as obvious or clear to me a little faster.
+
 ### Day 1:
 - learning to use LangFuse
 - Putting into action learnt python backend for AI calling
