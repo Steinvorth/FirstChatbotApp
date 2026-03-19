@@ -18,3 +18,8 @@ we can also run projects with:
 `uv run {command}`
 
 that way we can run our main project file.
+
+`uv sync` will install the dependencies from the toml file
+
+to activate the env we can run `source .venv/bin/activate`.
+
