@@ -8,5 +8,9 @@ This is just a public journey of learning how to code agentic, and chatbot apps.
 ### Day 1:
 - learning to use LangFuse
 - Putting into action learnt python backend for AI calling
-- Will be learning Langchain as an alternative, i want to see if its better to use openai's package or a "simpler" package.
+- Will be learning Langchain as an alternative, i want to see if its better to use openai's package or an "abstracted" package.
+
+for now, i will stick to openai's package, to learn the basics. i want to understand what is REALLY going on.
+
+This will be paired with LangFuse to be able to have traceability and observability of the app, and to be able to learn how to use the dashboard it as well. 
 
