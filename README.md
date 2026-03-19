@@ -14,3 +14,4 @@ for now, i will stick to openai's package, to learn the basics. i want to unders
 
 This will be paired with LangFuse to be able to have traceability and observability of the app, and to be able to learn how to use the dashboard it as well. 
 
+what I've learnt, is that using LangFuse is easier than thought, it basically has no configuration or learning curve. What is a little more complex, is understanding the traces, and how to use them to **iterate** on the agent and be able to make it better.
