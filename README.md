@@ -17,3 +17,12 @@ for now, i will stick to openai's package, to learn the basics. i want to unders
 This will be paired with LangFuse to be able to have traceability and observability of the app, and to be able to learn how to use the dashboard it as well. 
 
 what I've learnt, is that using LangFuse is easier than thought, it basically has no configuration or learning curve. What is a little more complex, is understanding the traces, and how to use them to **iterate** on the agent and be able to make it better.
+
+### Day 2:
+- learning to use gradio to build a simple chatbot interface, and connect it to openai python module
+- learning to add history to conversations, that way it can remember messages sent by the user
+- learning to trim history, that way it can only remember the last 4 messages, and not get confused by old messages that are not relevant anymore
+
+It was a bit tricky to understand how to use gradio, and how to connect it to openai, but after some trial and error, i was able to build a simple chatbot interface that can remember the last 4 messages sent by the user, and respond accordingly. it has both versions, no trim mode, and trim mode.
+
+Next i will try to build a more complex agent, that can call some tools, and also log these tool calls and also have more traceability on lang fuse.
