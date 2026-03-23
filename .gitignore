@@ -209,3 +209,25 @@ __marimo__/
 # Opencode deps
 .opencode/
 instructions/
+
+# Flutter / Dart
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/pubspec.lock
+*.iml
+.idea/
+*.swp
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
