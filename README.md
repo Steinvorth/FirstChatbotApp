@@ -26,3 +26,10 @@ what I've learnt, is that using LangFuse is easier than thought, it basically ha
 It was a bit tricky to understand how to use gradio, and how to connect it to openai, but after some trial and error, i was able to build a simple chatbot interface that can remember the last 4 messages sent by the user, and respond accordingly. it has both versions, no trim mode, and trim mode.
 
 Next i will try to build a more complex agent, that can call some tools, and also log these tool calls and also have more traceability on lang fuse.
+
+### Day 3 +
+Since i think i got the basics down, i will be building a basic chat app, just to test how building an API is like, with open ai python module.
+
+the purpose of this, is getting more in line with production ready software, which will not use gradio, but instead use notebooks as tests and validations, and logic will actually be used for the api instead of being directly in the gradio interface.
+
+It will use fast API for the backend, and Flutter for mobile, desktop and web frontend. 
