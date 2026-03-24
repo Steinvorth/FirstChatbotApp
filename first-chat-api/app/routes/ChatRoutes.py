@@ -50,31 +50,14 @@ SYSTEM_PROMPT = {
 
 
 # ============================================================
-# History Trimming
-# ============================================================
-def TrimHistory(history: list[dict], maxExchanges: int = 10) -> list[dict]:
-    keep = maxExchanges * 2
-    return history[-keep:]
-
-
-# ============================================================
 # POST /chat/send
 # ============================================================
-# Flow:
-#   1. Flutter sends {"message": "...", "conversation_id": "..."}
-#   2. We load existing history from the JSON file (or start fresh)
-#   3. Append user message, call OpenAI, append assistant response
-#   4. Save updated history back to the JSON file
-#   5. Return response + conversation_id to Flutter
 @router.post("/send")
 def SendMessage(request: SendMessageRequest):
-    # --- Step 1: Resolve conversation ID ---
     convo_id = request.conversation_id or str(uuid.uuid4())
 
-    # --- Step 2: Load existing history from JSON file ---
     messages = GetMessages(convo_id)
 
-    # --- Step 3: Append the user message ---
     messages.append(
         {
             "role": "user",
@@ -82,9 +65,8 @@ def SendMessage(request: SendMessageRequest):
         }
     )
 
-    # --- Step 4: Build the payload for OpenAI ---
-    trimmedHistory = TrimHistory(messages)
-    payload = [SYSTEM_PROMPT] + trimmedHistory
+    # Send full history to OpenAI — no trimming
+    payload = [SYSTEM_PROMPT] + messages
 
     # --- Step 5: Call OpenAI (auto-traced by Langfuse) ---
     response = openaiClient.chat.completions.create(
