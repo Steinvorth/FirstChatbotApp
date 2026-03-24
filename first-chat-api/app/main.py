@@ -2,14 +2,19 @@
 first-chat-api — Main Application Entry Point
 
 Run with: uv run uvicorn app.main:app --reload
-
-This is the starting point of your FastAPI application.
-FastAPI works similar to ASP.NET Minimal APIs:
-- You create an "app" instance (like WebApplication.CreateBuilder in C#)
-- You attach route groups to it (like MapGroup / MapGet in C#)
 """
 
+import os
+from dotenv import load_dotenv
+
+# ── Load .env BEFORE anything else ───────────────────────
+# This is the entry point uvicorn calls. We load env vars here
+# so they're available when ChatRoutes.py imports OpenAI/Langfuse.
+envPath = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+load_dotenv(os.path.abspath(envPath), override=True)
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.routes.ChatRoutes import router as chat_router
 from app.routes.HealthRoutes import router as health_router
 
@@ -19,6 +24,15 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# --- Register route groups (like app.MapGroup() in ASP.NET) ---
+# --- CORS Middleware ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Register route groups ---
 app.include_router(health_router)
 app.include_router(chat_router)

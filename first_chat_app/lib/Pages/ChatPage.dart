@@ -8,7 +8,11 @@ import 'package:first_chat_app/Widgets/index.dart';
 /// Desktop (>= 768px): sidebar pinned on the left, collapsible with animation.
 /// Mobile (< 768px): sidebar accessed via Drawer (hamburger menu).
 ///
-/// The sidebar and chat content both have independent scroll views.
+/// Fully wired to the FastAPI backend:
+/// - Loads conversations on startup
+/// - Sends messages and tracks conversation_id
+/// - Loads history when selecting a conversation
+/// - Deletes conversations
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
 
@@ -26,17 +30,128 @@ class _ChatPageState extends State<ChatPage> {
   bool _isLoading = false;
   String? _selectedConversationId;
   List<ChatMessageData> _messages = [];
-  final List<ConversationData> _conversations = [];
+  List<ConversationData> _conversations = [];
 
   // ─── Responsive breakpoint ────────────────────────────
   static const double _desktopBreakpoint = 768;
   static const double _sidebarWidth = 280;
 
   @override
+  void initState() {
+    super.initState();
+    _LoadConversations();
+  }
+
+  @override
   void dispose() {
     _messageController.dispose();
     _chatScrollController.dispose();
     super.dispose();
+  }
+
+  // ─── API: Load conversations list ─────────────────────
+
+  Future<void> _LoadConversations() async {
+    try {
+      final result = await ChatService.GetConversations();
+      final List<dynamic> rawConversations = result['conversations'] ?? [];
+
+      setState(() {
+        _conversations = rawConversations.map((c) {
+          return ConversationData(
+            id: c['id'] ?? '',
+            title: c['title'] ?? 'Untitled',
+            lastMessage: c['last_message'],
+          );
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load conversations: $e');
+    }
+  }
+
+  // ─── API: Load history for a conversation ─────────────
+
+  Future<void> _LoadHistory(String conversationId) async {
+    try {
+      final result = await ChatService.GetHistory(
+        conversationId: conversationId,
+      );
+      final List<dynamic> rawMessages = result['messages'] ?? [];
+
+      setState(() {
+        _selectedConversationId = conversationId;
+        _messages = rawMessages.map((m) {
+          return ChatMessageData(
+            message: m['content'] ?? '',
+            isUser: m['role'] == 'user',
+          );
+        }).toList();
+      });
+      _ScrollToBottom();
+    } catch (e) {
+      debugPrint('Failed to load history: $e');
+    }
+  }
+
+  // ─── API: Send a message ──────────────────────────────
+
+  Future<void> _HandleSendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    // Add user message immediately for responsiveness
+    setState(() {
+      _messages.add(ChatMessageData(message: text, isUser: true));
+      _isLoading = true;
+    });
+    _messageController.clear();
+    _ScrollToBottom();
+
+    try {
+      final result = await ChatService.SendMessage(
+        message: text,
+        conversationId: _selectedConversationId,
+      );
+
+      final aiMessage =
+          result['response'] ??
+          result['message'] ??
+          result['detail'] ??
+          'No response from API';
+
+      // Track the conversation_id returned by the API
+      // This is important: on the FIRST message, the API creates
+      // a new conversation_id and returns it. We need to save it
+      // so subsequent messages go to the same conversation.
+      final returnedConvoId = result['conversation_id'];
+
+      setState(() {
+        _isLoading = false;
+        _messages.add(
+          ChatMessageData(message: aiMessage.toString(), isUser: false),
+        );
+
+        if (returnedConvoId != null) {
+          _selectedConversationId = returnedConvoId;
+        }
+      });
+
+      // Refresh the sidebar to show the new/updated conversation
+      await _LoadConversations();
+      _ScrollToBottom();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _messages.add(
+          ChatMessageData(
+            message: 'Error: Could not reach the API. Is the server running?',
+            isUser: false,
+          ),
+        );
+      });
+      debugPrint('Failed to send message: $e');
+    }
   }
 
   // ─── Actions ──────────────────────────────────────────
@@ -51,25 +166,25 @@ class _ChatPageState extends State<ChatPage> {
       _messages = [];
     });
     _messageController.clear();
-    // Close drawer on mobile after action
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
   }
 
   void _HandleSelectConversation(String conversationId) {
-    setState(() {
-      _selectedConversationId = conversationId;
-    });
     _LoadHistory(conversationId);
-    // Close drawer on mobile after selection
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
   }
 
-  void _HandleDeleteConversation(String conversationId) {
-    ChatService.DeleteConversation(conversationId: conversationId);
+  Future<void> _HandleDeleteConversation(String conversationId) async {
+    try {
+      await ChatService.DeleteConversation(conversationId: conversationId);
+    } catch (e) {
+      debugPrint('Failed to delete conversation: $e');
+    }
+
     setState(() {
       _conversations.removeWhere((c) => c.id == conversationId);
       if (_selectedConversationId == conversationId) {
@@ -77,48 +192,6 @@ class _ChatPageState extends State<ChatPage> {
         _messages = [];
       }
     });
-  }
-
-  Future<void> _LoadHistory(String conversationId) async {
-    final result = await ChatService.GetHistory(conversationId: conversationId);
-    // TODO: Parse the response and populate _messages
-    // For now this is a stub — you'll wire this when the API is ready.
-    debugPrint('History response: $result');
-  }
-
-  Future<void> _HandleSendMessage() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-
-    // Add user message immediately for responsiveness
-    setState(() {
-      _messages.add(ChatMessageData(message: text, isUser: true));
-      _isLoading = true;
-    });
-    _messageController.clear();
-    _ScrollToBottom();
-
-    // Call the API
-    final result = await ChatService.SendMessage(
-      message: text,
-      conversationId: _selectedConversationId,
-    );
-
-    setState(() {
-      _isLoading = false;
-
-      // Extract the AI response — adjust the key when your API is ready
-      final aiMessage =
-          result['response'] ??
-          result['message'] ??
-          result['detail'] ??
-          'No response from API';
-
-      _messages.add(
-        ChatMessageData(message: aiMessage.toString(), isUser: false),
-      );
-    });
-    _ScrollToBottom();
   }
 
   void _ScrollToBottom() {
@@ -152,15 +225,12 @@ class _ChatPageState extends State<ChatPage> {
   Widget _BuildChatArea() {
     return Column(
       children: [
-        // ─── Chat messages (scrollable) ──────────────
         Expanded(
           child: ChatMessageList(
             messages: _messages,
             scrollController: _chatScrollController,
           ),
         ),
-
-        // ─── Input bar (pinned to bottom) ────────────
         ChatInputBar(
           controller: _messageController,
           onSend: _HandleSendMessage,
@@ -168,6 +238,13 @@ class _ChatPageState extends State<ChatPage> {
         ),
       ],
     );
+  }
+
+  String _GetAppBarTitle() {
+    if (_selectedConversationId == null) return 'New Chat';
+    final match = _conversations.where((c) => c.id == _selectedConversationId);
+    if (match.isNotEmpty) return match.first.title;
+    return 'Chat';
   }
 
   PreferredSizeWidget _BuildAppBar(bool isDesktop) {
@@ -180,9 +257,9 @@ class _ChatPageState extends State<ChatPage> {
               onPressed: _ToggleSidebar,
               tooltip: _isSidebarOpen ? 'Close sidebar' : 'Open sidebar',
             )
-          : null, // On mobile, Scaffold auto-adds the drawer hamburger
+          : null,
       title: Text(
-        _selectedConversationId ?? 'New Chat',
+        _GetAppBarTitle(),
         style: AppTypography.subheading.copyWith(color: AppColors.textPrimary),
       ),
     );
@@ -197,7 +274,6 @@ class _ChatPageState extends State<ChatPage> {
         appBar: _BuildAppBar(true),
         body: Row(
           children: [
-            // ─── Collapsible sidebar with animation ────
             AnimatedContainer(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
@@ -214,15 +290,12 @@ class _ChatPageState extends State<ChatPage> {
                     )
                   : const SizedBox.shrink(),
             ),
-
-            // ─── Chat area fills remaining space ───────
             Expanded(child: _BuildChatArea()),
           ],
         ),
       );
     }
 
-    // ─── Mobile layout: sidebar as Drawer ───────────────
     return Scaffold(
       appBar: _BuildAppBar(false),
       drawer: Drawer(

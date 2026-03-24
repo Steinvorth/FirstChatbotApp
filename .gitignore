@@ -232,3 +232,6 @@ instructions/
 **/android/.gradle/
 **/android/local.properties
 **/android/key.properties
+
+# API local data
+first-chat-api/data/

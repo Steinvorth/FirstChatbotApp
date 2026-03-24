@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 
 /// Centralized HTTP client for all API calls.
@@ -6,7 +7,21 @@ import 'package:http/http.dart' as http;
 class APIClient {
   APIClient._();
 
-  static const String baseUrl = 'http://localhost:8000';
+  /// Base URL resolves to the correct host:
+  /// - Android emulator uses 10.0.2.2 to reach the host machine's localhost
+  /// - iOS simulator and desktop use regular localhost
+  static final String baseUrl = _ResolveBaseUrl();
+
+  static String _ResolveBaseUrl() {
+    try {
+      if (Platform.isAndroid) {
+        return 'http://10.0.2.2:8000';
+      }
+    } catch (_) {
+      // Platform not available (web) — fall through to default
+    }
+    return 'http://localhost:8000';
+  }
 
   static final Map<String, String> _defaultHeaders = {
     'Content-Type': 'application/json',

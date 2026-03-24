@@ -1,17 +1,30 @@
-"""
-Chat Routes — The core of your chatbot API.
+from dotenv import load_dotenv
+import os
+import uuid
 
-These are the endpoints your Flutter app will call.
-Think of this file like a C# Controller — it defines the HTTP contract,
-but the actual logic (calling OpenAI, managing history) will live elsewhere.
+# ── Load .env FIRST, before any SDK imports ──────────────
+# Langfuse and OpenAI both read env vars at import time,
+# so the keys must be in os.environ BEFORE we import them.
+envPath = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")
+load_dotenv(os.path.abspath(envPath), override=True)
 
-C# parallel:
-    [ApiController]
-    [Route("chat")]
-    public class ChatController : ControllerBase { ... }
-"""
+from fastapi import APIRouter, Response
+from pydantic import BaseModel
+from typing import Optional
+from langfuse.openai import OpenAI
+from langfuse import get_client
 
-from fastapi import APIRouter
+# JSON file storage
+from app.services.ConversationStore import (
+    GetMessages,
+    SaveConversation,
+    DeleteConversation as StoreDeleteConversation,
+    ListConversations,
+)
+
+openaiClient = OpenAI()
+langfuseClient = get_client()
+
 
 router = APIRouter(
     prefix="/chat",
@@ -20,85 +33,123 @@ router = APIRouter(
 
 
 # ============================================================
+# Request Model
+# ============================================================
+class SendMessageRequest(BaseModel):
+    message: str
+    conversation_id: Optional[str] = None
+
+
+# ============================================================
+# System Prompt
+# ============================================================
+SYSTEM_PROMPT = {
+    "role": "system",
+    "content": "You are a helpful assistant. Answer concisely and clearly.",
+}
+
+
+# ============================================================
+# History Trimming
+# ============================================================
+def TrimHistory(history: list[dict], maxExchanges: int = 10) -> list[dict]:
+    keep = maxExchanges * 2
+    return history[-keep:]
+
+
+# ============================================================
 # POST /chat/send
 # ============================================================
-# This is your main endpoint. The Flutter app sends a user message,
-# and this endpoint should return the AI's response.
-#
-# What you'll need to implement:
-#   1. Accept a request body with the user's message (and maybe a conversation_id)
-#   2. Build the messages payload (system prompt + history + new message)
-#   3. Call OpenAI's chat completion API
-#   4. Store the exchange in your conversation history
-#   5. Return the AI's response
-#
-# Hints:
-#   - Use a Pydantic model for the request body (like a C# record/DTO)
-#   - Example: class SendMessageRequest(BaseModel): message: str
-#   - FastAPI auto-validates and auto-documents it (just like ASP.NET model binding)
-#
-# TODO: Implement this endpoint
+# Flow:
+#   1. Flutter sends {"message": "...", "conversation_id": "..."}
+#   2. We load existing history from the JSON file (or start fresh)
+#   3. Append user message, call OpenAI, append assistant response
+#   4. Save updated history back to the JSON file
+#   5. Return response + conversation_id to Flutter
 @router.post("/send")
-def SendMessage():
-    return {"detail": "Not implemented yet — this is your job!"}
+def SendMessage(request: SendMessageRequest):
+    # --- Step 1: Resolve conversation ID ---
+    convo_id = request.conversation_id or str(uuid.uuid4())
+
+    # --- Step 2: Load existing history from JSON file ---
+    messages = GetMessages(convo_id)
+
+    # --- Step 3: Append the user message ---
+    messages.append(
+        {
+            "role": "user",
+            "content": request.message,
+        }
+    )
+
+    # --- Step 4: Build the payload for OpenAI ---
+    trimmedHistory = TrimHistory(messages)
+    payload = [SYSTEM_PROMPT] + trimmedHistory
+
+    # --- Step 5: Call OpenAI (auto-traced by Langfuse) ---
+    response = openaiClient.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=payload,
+    )
+    aiMessage = response.choices[0].message.content
+
+    # --- Step 6: Append assistant response ---
+    messages.append(
+        {
+            "role": "assistant",
+            "content": aiMessage,
+        }
+    )
+
+    # --- Step 7: Save to JSON file ---
+    # Use the first user message as the conversation title
+    title = request.message[:50]
+    SaveConversation(convo_id, title, messages)
+
+    # --- Step 8: Flush Langfuse ---
+    langfuseClient.flush()
+
+    # --- Step 9: Return to Flutter ---
+    return {
+        "response": aiMessage,
+        "conversation_id": convo_id,
+    }
 
 
 # ============================================================
 # GET /chat/history/{conversation_id}
 # ============================================================
-# Returns the message history for a given conversation.
-# Your Flutter app will call this to load previous messages.
-#
-# What you'll need to implement:
-#   1. Accept a conversation_id as a path parameter
-#   2. Look up the stored messages for that conversation
-#   3. Return them as a list
-#
-# Hints:
-#   - Path params in FastAPI work like [Route("{id}")] in C#
-#   - Just add the param to the function signature: def GetHistory(conversation_id: str)
-#   - FastAPI picks it up automatically from the URL
-#
-# TODO: Implement this endpoint
+# Returns the full message history for a conversation.
+# Flutter calls this when the user taps a conversation in the sidebar.
 @router.get("/history/{conversation_id}")
 def GetHistory(conversation_id: str):
-    return {"detail": f"Not implemented yet — load history for {conversation_id}"}
+    messages = GetMessages(conversation_id)
+    return {
+        "conversation_id": conversation_id,
+        "messages": messages,
+    }
 
 
 # ============================================================
 # GET /chat/conversations
 # ============================================================
-# Returns a list of all conversations (id + maybe a title/preview).
-# Your Flutter app will use this for a conversation list/sidebar.
-#
-# What you'll need to implement:
-#   1. Return all stored conversations with their IDs and metadata
-#
-# Hints:
-#   - Start simple: just return a list of conversation IDs
-#   - Later you can add titles, timestamps, message counts, etc.
-#
-# TODO: Implement this endpoint
+# Returns a list of all conversations with metadata.
+# Flutter calls this on startup to populate the sidebar.
 @router.get("/conversations")
 def GetConversations():
-    return {"detail": "Not implemented yet — list all conversations"}
+    conversations = ListConversations()
+    return {
+        "conversations": conversations,
+    }
 
 
 # ============================================================
 # DELETE /chat/history/{conversation_id}
 # ============================================================
-# Deletes a conversation and its history.
-#
-# What you'll need to implement:
-#   1. Accept a conversation_id
-#   2. Remove that conversation from storage
-#   3. Return a confirmation
-#
-# Hints:
-#   - Same path param pattern as GetHistory
-#   - Return a 204 No Content on success (from fastapi import Response, then Response(status_code=204))
-#
-# TODO: Implement this endpoint
+# Deletes a conversation and its history from the JSON file.
 @router.delete("/history/{conversation_id}")
 def DeleteConversation(conversation_id: str):
-    return {"detail": f"Not implemented yet — delete {conversation_id}"}
+    deleted = StoreDeleteConversation(conversation_id)
+    if not deleted:
+        return {"error": True, "message": "Conversation not found"}
+    return Response(status_code=204)
