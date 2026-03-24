@@ -5,16 +5,17 @@ import 'package:first_chat_app/API/APIClient.dart';
 class ChatService {
   ChatService._();
 
-  /// Sends a user message and returns the API response.
-  static Future<Map<String, dynamic>> SendMessage({
+  /// Sends a message and streams SSE events back.
+  /// Yields SSEEvent objects: conversation_id, token, done.
+  static Stream<SSEEvent> SendMessageStream({
     required String message,
     String? conversationId,
-  }) async {
+  }) {
     final body = <String, dynamic>{'message': message};
     if (conversationId != null) {
       body['conversation_id'] = conversationId;
     }
-    return await APIClient.Post('/chat/send', body: body);
+    return APIClient.PostStream('/chat/send', body: body);
   }
 
   /// Fetches the message history for a specific conversation.

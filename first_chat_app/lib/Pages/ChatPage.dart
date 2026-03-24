@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:first_chat_app/Theme/index.dart';
+import 'package:first_chat_app/API/APIClient.dart';
 import 'package:first_chat_app/Services/index.dart';
 import 'package:first_chat_app/Widgets/index.dart';
 
@@ -94,7 +96,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // ─── API: Send a message ──────────────────────────────
+  // ─── API: Send a message (streaming) ───────────────────
 
   Future<void> _HandleSendMessage() async {
     final text = _messageController.text.trim();
@@ -108,46 +110,51 @@ class _ChatPageState extends State<ChatPage> {
     _messageController.clear();
     _ScrollToBottom();
 
+    // Add an empty AI bubble that we'll fill with streamed tokens
+    final aiBubbleIndex = _messages.length;
+    setState(() {
+      _messages.add(const ChatMessageData(message: '', isUser: false));
+    });
+
     try {
-      final result = await ChatService.SendMessage(
+      final stream = ChatService.SendMessageStream(
         message: text,
         conversationId: _selectedConversationId,
       );
 
-      final aiMessage =
-          result['response'] ??
-          result['message'] ??
-          result['detail'] ??
-          'No response from API';
+      await for (final SSEEvent event in stream) {
+        switch (event.event) {
+          case 'conversation_id':
+            setState(() {
+              _selectedConversationId = event.data;
+            });
+            break;
 
-      // Track the conversation_id returned by the API
-      // This is important: on the FIRST message, the API creates
-      // a new conversation_id and returns it. We need to save it
-      // so subsequent messages go to the same conversation.
-      final returnedConvoId = result['conversation_id'];
+          case 'token':
+            // Token data is JSON-encoded string (handles newlines/quotes)
+            final token = jsonDecode(event.data) as String;
+            setState(() {
+              final current = _messages[aiBubbleIndex];
+              _messages[aiBubbleIndex] = ChatMessageData(
+                message: current.message + token,
+                isUser: false,
+              );
+            });
+            _ScrollToBottom();
+            break;
 
-      setState(() {
-        _isLoading = false;
-        _messages.add(
-          ChatMessageData(message: aiMessage.toString(), isUser: false),
-        );
-
-        if (returnedConvoId != null) {
-          _selectedConversationId = returnedConvoId;
+          case 'done':
+            setState(() => _isLoading = false);
+            await _LoadConversations();
+            break;
         }
-      });
-
-      // Refresh the sidebar to show the new/updated conversation
-      await _LoadConversations();
-      _ScrollToBottom();
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _messages.add(
-          ChatMessageData(
-            message: 'Error: Could not reach the API. Is the server running?',
-            isUser: false,
-          ),
+        _messages[aiBubbleIndex] = const ChatMessageData(
+          message: 'Error: Could not reach the API. Is the server running?',
+          isUser: false,
         );
       });
       debugPrint('Failed to send message: $e');
